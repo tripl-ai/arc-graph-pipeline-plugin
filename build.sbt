@@ -18,7 +18,7 @@ lazy val root = (project in file(".")).
     parallelExecution in Test := false,
     parallelExecution in IntegrationTest := false,
     buildInfoKeys := Seq[BuildInfoKey](version, scalaVersion),
-    buildInfoPackage := "ai.tripl.arc.elasticsearch",
+    buildInfoPackage := "ai.tripl.arc.graph",
     Defaults.itSettings,
     publishTo := sonatypePublishTo.value,
     pgpPassphrase := Some(sys.env.get("PGP_PASSPHRASE").getOrElse("").toCharArray),
