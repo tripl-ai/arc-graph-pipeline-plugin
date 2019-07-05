@@ -1,2 +1,1 @@
-ai.tripl.arc.extract.ElasticsearchExtract
-ai.tripl.arc.load.ElasticsearchLoad
+ai.tripl.arc.transform.GraphTransform
