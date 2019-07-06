@@ -11,16 +11,17 @@ import org.opencypher.morpheus.api.io.{MorpheusNodeTable, MorpheusRelationshipTa
 
 import com.typesafe.config._
 
-import ai.tripl.arc.api._
 import ai.tripl.arc.api.API._
-import ai.tripl.arc.config._
+import ai.tripl.arc.api._
 import ai.tripl.arc.config.Error._
+import ai.tripl.arc.config._
 import ai.tripl.arc.plugins.PipelineStagePlugin
 import ai.tripl.arc.util.CloudUtils
 import ai.tripl.arc.util.DetailException
 import ai.tripl.arc.util.EitherUtils._
 import ai.tripl.arc.util.ExtractUtils
 import ai.tripl.arc.util.MetadataUtils
+import ai.tripl.arc.util.SQLUtils
 import ai.tripl.arc.util.Utils
 
 class GraphTransform extends PipelineStagePlugin {
@@ -32,11 +33,12 @@ class GraphTransform extends PipelineStagePlugin {
     import ai.tripl.arc.config.ConfigUtils._
     implicit val c = config
 
-    val expectedKeys = "type" :: "name" :: "description" :: "environments" :: "inputURI" :: "outputGraph" :: "nodes" :: "relationships" :: "authentication" :: "persist" :: "params" :: "numPartitions" :: "partitionBy" :: Nil
+    val expectedKeys = "type" :: "name" :: "description" :: "environments" :: "inputURI" :: "cypherParams" :: "outputGraph" :: "nodes" :: "relationships" :: "authentication" :: "persist" :: "params" :: "numPartitions" :: "partitionBy" :: Nil
     val name = getValue[String]("name")
     val description = getOptionalValue[String]("description")
     val authentication = readAuthentication("authentication")  
     val inputCypher = if (config.hasPath("inputURI")) getValue[String]("inputURI") |> parseURI("inputURI") _ |> textContentForURI("inputURI", authentication) _ else Right("")
+    val cypherParams = readMap("cypherParams", c)
     val nodes = if (!config.hasPath("inputURI")) readNodes("nodes") else Right(List(GraphNode("","")))
     val relationships = if (!config.hasPath("inputURI")) readRelationships("relationships") else Right(List(GraphRelationship("","")))
     val outputGraph = getValue[String]("outputGraph")
@@ -51,18 +53,23 @@ class GraphTransform extends PipelineStagePlugin {
         val source = if(c.hasPath("inputURI")) Right(inputCypher) else Left(MorpheusGraph(nodes, relationships))
 
         val stage = GraphTransformStage(
-            plugin=this,
-            name=name,
-            description=description,
-            source=source,
-            outputGraph=outputGraph,
-            params=params,
-            persist=persist,
-            numPartitions=numPartitions,
-            partitionBy=partitionBy
-          )        
+          plugin=this,
+          name=name,
+          description=description,
+          source=source,
+          cypherParams=cypherParams,
+          outputGraph=outputGraph,
+          params=params,
+          persist=persist,
+          numPartitions=numPartitions,
+          partitionBy=partitionBy
+        )        
 
-          Right(stage)
+        stage.stageDetail.put("outputGraph", outputGraph)   
+        stage.stageDetail.put("params", params.asJava)
+        stage.stageDetail.put("persist", java.lang.Boolean.valueOf(persist))
+
+        Right(stage)
       case _ =>
         val allErrors: Errors = List(name, description, inputCypher, nodes, relationships, outputGraph, persist, numPartitions, partitionBy, invalidKeys).collect{ case Left(errs) => errs }.flatten
         val stageName = stringOrDefault(name, "unnamed stage")
@@ -175,6 +182,7 @@ case class GraphTransformStage(
     name: String, 
     description: Option[String], 
     source: Either[MorpheusGraph, String], 
+    cypherParams: Map[String, String],
     outputGraph: String, 
     params: Map[String, String], 
     persist: Boolean,
@@ -204,7 +212,6 @@ object GraphTransformStage {
 
     val nodeSignature = "GraphTransform requires all Nodes views to have a column named 'id'."
     val relsSignature = "GraphTransform requires all Relationships views to have a columns named 'id', 'source' and 'target'."
-    // val relsTypeSignature = "GraphTransform requires all  to have 'source' and 'target' the same data type as nodesView 'id'."
 
     val graph = try {
       stage.source match {
@@ -243,7 +250,11 @@ object GraphTransformStage {
           morpheus.readFrom(merged(0), merged.drop(1):_*)
         }
         case Right(cypher) => {
-          morpheus.cypher(cypher).graph
+          // inject parameters
+          val stmt = SQLUtils.injectParameters(cypher, stage.cypherParams, false)
+          stage.stageDetail.put("cypher", stmt)
+          
+          morpheus.cypher(stmt).graph
         }
       }
     } catch {
