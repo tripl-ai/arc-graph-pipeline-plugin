@@ -43,13 +43,11 @@ class GraphTransform extends PipelineStagePlugin {
     val relationships = if (!config.hasPath("inputURI")) readRelationships("relationships") else Right(List(GraphRelationship("","")))
     val outputGraph = getValue[String]("outputGraph")
     val persist = getValue[java.lang.Boolean]("persist", default = Some(false))
-    val numPartitions = getOptionalValue[Int]("numPartitions")
-    val partitionBy = getValue[StringList]("partitionBy", default = Some(Nil))        
     val params = readMap("params", c)
     val invalidKeys = checkValidKeys(c)(expectedKeys)
 
-    (name, description, inputCypher, nodes, relationships, outputGraph, persist, numPartitions, partitionBy, invalidKeys) match {
-      case (Right(name), Right(description), Right(inputCypher), Right(nodes), Right(relationships), Right(outputGraph), Right(persist), Right(numPartitions), Right(partitionBy), Right(invalidKeys)) =>    
+    (name, description, inputCypher, nodes, relationships, outputGraph, persist, invalidKeys) match {
+      case (Right(name), Right(description), Right(inputCypher), Right(nodes), Right(relationships), Right(outputGraph), Right(persist),  Right(invalidKeys)) =>    
         val source = if(c.hasPath("inputURI")) Right(inputCypher) else Left(MorpheusGraph(nodes, relationships))
 
         val stage = GraphTransformStage(
@@ -60,9 +58,7 @@ class GraphTransform extends PipelineStagePlugin {
           cypherParams=cypherParams,
           outputGraph=outputGraph,
           params=params,
-          persist=persist,
-          numPartitions=numPartitions,
-          partitionBy=partitionBy
+          persist=persist
         )        
 
         stage.stageDetail.put("outputGraph", outputGraph)   
@@ -71,7 +67,7 @@ class GraphTransform extends PipelineStagePlugin {
 
         Right(stage)
       case _ =>
-        val allErrors: Errors = List(name, description, inputCypher, nodes, relationships, outputGraph, persist, numPartitions, partitionBy, invalidKeys).collect{ case Left(errs) => errs }.flatten
+        val allErrors: Errors = List(name, description, inputCypher, nodes, relationships, outputGraph, persist, invalidKeys).collect{ case Left(errs) => errs }.flatten
         val stageName = stringOrDefault(name, "unnamed stage")
         val err = StageError(index, stageName, c.origin.lineNumber, allErrors)
         Left(err :: Nil)
@@ -185,9 +181,7 @@ case class GraphTransformStage(
     cypherParams: Map[String, String],
     outputGraph: String, 
     params: Map[String, String], 
-    persist: Boolean,
-    numPartitions: Option[Int], 
-    partitionBy: List[String]    
+    persist: Boolean
   ) extends PipelineStage {
 
   override def execute()(implicit spark: SparkSession, logger: ai.tripl.arc.util.log.logger.Logger, arcContext: ARCContext): Option[DataFrame] = {
