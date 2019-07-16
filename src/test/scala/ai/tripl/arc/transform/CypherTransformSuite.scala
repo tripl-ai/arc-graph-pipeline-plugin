@@ -14,6 +14,7 @@ import org.opencypher.morpheus.api.MorpheusSession
 
 import ai.tripl.arc.api._
 import ai.tripl.arc.api.API._
+import ai.tripl.arc.config.ArcPipeline
 import ai.tripl.arc.util.log.LoggerFactory 
 
 import ai.tripl.arc.util._
@@ -105,7 +106,7 @@ class CypherTransformSuite extends FunSuite with BeforeAndAfter {
       ]
     }"""
     
-    val pipelineEither = ConfigUtils.parseConfig(Left(conf), arcContext)
+    val pipelineEither = ArcPipeline.parseConfig(Left(conf), arcContext)
 
     // assert graph created
     pipelineEither match {
