@@ -1,5 +1,9 @@
 # Change Log
 
+## 1.2.0
+
+- update to Arc 2.8.0
+
 ## 1.1.0
 
 - update to Spark 2.4.5
